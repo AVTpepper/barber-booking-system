@@ -1,16 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barber Booking System</title>
-</head>
-<body>
-    <h1>Welcome to Barber Booking</h1>
-    <ul>
-        {% for booking in bookings %}
-            <li>{{ booking.customer.name }} - {{ booking.date }} at {{ booking.time }}</li>
-        {% endfor %}
-    </ul>
-</body>
-</html>
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Welcome to Barber Booking</h1>
+<ul class="list-group">
+    {% for booking in bookings %}
+        <li class="list-group-item">{{ booking.customer.name }} - {{ booking.date }} at {{ booking.time }}</li>
+    {% endfor %}
+</ul>
+{% endblock %}
