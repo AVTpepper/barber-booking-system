@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="jumbotron text-center">
+    <h1>Welcome to Our Barber Booking System</h1>
+    <p>Book your next appointment with our talented barbers.</p>
+    <a href="{% url 'register' %}" class="btn btn-primary btn-lg">Register</a>
+    <a href="{% url 'login' %}" class="btn btn-secondary btn-lg">Login</a>
+    <a href="{% url 'home' %}" class="btn btn-success btn-lg">View My Bookings</a>
+</div>
+{% endblock %}

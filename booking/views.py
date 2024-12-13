@@ -1,8 +1,15 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
+from django.contrib.auth.views import LogoutView
 from .models import Booking
 from .forms import BookingForm, CustomUserCreationForm
+
+
+def landing_page(request):
+    """This is the public landing page for all users."""
+    return render(request, 'booking/landing_page.html')
+
 
 @login_required
 def home(request):
@@ -31,3 +38,7 @@ def register(request):
     else:
         form = CustomUserCreationForm()
     return render(request, 'registration/register.html', {'form': form})
+
+
+class CustomLogoutView(LogoutView):
+    template_name = 'registration/logout.html'
