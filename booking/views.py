@@ -10,6 +10,64 @@ from .models import Booking, Barber
 from .forms import BookingForm, CustomUserCreationForm
 
 
+@login_required
+def calendar_view(request, year=None, month=None):
+    """Display a calendar with bookings for a specific month."""
+    today = date.today()
+
+    # Default to current year and month if not provided
+    year = year or today.year
+    month = month or today.month
+
+    # Get the first day and the number of days in the current month
+    first_day_of_month = date(year, month, 1)
+    days_in_month = monthrange(year, month)[1]  # Total days in the current month
+
+    # Weekday of the first day of the month (0 = Monday, 6 = Sunday)
+    first_weekday = first_day_of_month.weekday()
+
+    # Adjust for Sunday-based calendars (Sunday = 0, Saturday = 6)
+    first_weekday = (first_weekday + 1) % 7
+
+    # Calculate the start date (the Sunday before the first day of the month)
+    start_date = first_day_of_month - timedelta(days=first_weekday)
+
+    # Calculate the end date (ensure there are 35 slots: 5 rows × 7 columns)
+    end_date = start_date + timedelta(days=34)
+
+    # Generate a list of all days to display in the calendar
+    calendar_days = []
+    current_date = start_date
+    while current_date <= end_date:
+        calendar_days.append(current_date)
+        current_date += timedelta(days=1)
+
+    # Get bookings for the range of dates
+    bookings = Booking.objects.filter(customer=request.user, date__range=(start_date, end_date))
+
+    # Group bookings by date
+    bookings_by_date = {}
+    for booking in bookings:
+        if booking.date not in bookings_by_date:
+            bookings_by_date[booking.date] = []
+        bookings_by_date[booking.date].append(booking)
+
+    # Get the previous and next months
+    prev_month = (first_day_of_month - timedelta(days=1)).replace(day=1)
+    next_month = (first_day_of_month + timedelta(days=days_in_month)).replace(day=1)
+
+    context = {
+        'year': year,
+        'month': month,
+        'month_name': first_day_of_month.strftime('%B'),
+        'calendar_days': calendar_days,
+        'bookings_by_date': bookings_by_date,
+        'prev_month': prev_month,
+        'next_month': next_month,
+    }
+    return render(request, 'booking/calendar.html', context)
+
+
 def send_confirmation_email(booking):
     subject = "Booking Confirmation"
     message = f"Dear {booking.customer.username},\n\nYour booking with {booking.barber.name} on {booking.date} at {booking.time} has been confirmed.\n\nThank you!"
@@ -18,8 +76,19 @@ def send_confirmation_email(booking):
     
     
 def landing_page(request):
-    """This is the public landing page for all users."""
-    return render(request, 'booking/landing_page.html')
+    """Landing page displaying services and barbers."""
+    # Example: Fetch barbers and services from the database
+    barbers = Barber.objects.all()
+    services = [
+        {"name": "Haircut", "description": "Professional haircut tailored to your style."},
+        {"name": "Beard Trim", "description": "Expert beard grooming and styling."},
+        {"name": "Combo", "description": "Haircut and beard trim package."},
+    ]
+    context = {
+        "barbers": barbers,
+        "services": services,
+    }
+    return render(request, 'booking/landing_page.html', context)
 
 
 @login_required
@@ -107,45 +176,3 @@ def send_admin_notification(booking):
     send_mail(subject, message, settings.EMAIL_HOST_USER, recipient, fail_silently=False)
 
 
-@login_required
-def calendar_view(request, year=None, month=None):
-    """Display a calendar with bookings for a specific month"""
-    today = date.today()
-
-    # Default to the current month if not provided
-    year = year or today.year
-    month = month or today.month
-
-    # Get the first and last day of the month
-    start_date = date(year, month, 1)
-    end_date = date(year, month, monthrange(year, month)[1])
-
-    # Get all bookings for the logged-in user within this month
-    bookings = Booking.objects.filter(customer=request.user, date__range=(start_date, end_date))
-
-    # Create a dictionary of bookings grouped by date
-    bookings_by_date = {}
-    for booking in bookings:
-        if booking.date not in bookings_by_date:
-            bookings_by_date[booking.date] = []
-        bookings_by_date[booking.date].append(booking)
-
-    # Generate a list of days in the month
-    days_in_month = range(1, monthrange(year, month)[1] + 1)
-
-    # Get the previous and next months
-    prev_month = (start_date - timedelta(days=1)).replace(day=1)
-    next_month = (end_date + timedelta(days=1)).replace(day=1)
-
-    context = {
-        'year': year,
-        'month': month,
-        'month_name': start_date.strftime('%B'),
-        'days_in_month': days_in_month,  # Pass the range as a list
-        'start_date': start_date,
-        'bookings_by_date': bookings_by_date,
-        'prev_month': prev_month,
-        'next_month': next_month,
-    }
-
-    return render(request, 'booking/calendar.html', context)

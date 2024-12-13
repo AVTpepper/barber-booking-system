@@ -1,41 +1,45 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
+
 {% block content %}
 <div class="container">
     <h2 class="text-center">Bookings for {{ month_name }} {{ year }}</h2>
 
     <div class="d-flex justify-content-between mb-3">
-        <a href="{% url 'calendar_view_by_month' prev_month.year prev_month.month %}" class="btn btn-primary">&larr;
-            Previous</a>
-        <a href="{% url 'calendar_view_by_month' next_month.year next_month.month %}" class="btn btn-primary">Next
-            &rarr;</a>
+        <a href="{% url 'calendar_view_by_month' prev_month.year prev_month.month %}" class="btn btn-primary">&larr; Previous</a>
+        <a href="{% url 'calendar_view_by_month' next_month.year next_month.month %}" class="btn btn-primary">Next &rarr;</a>
+    </div>
+
+    <!-- Calendar Header -->
+    <div class="row text-center fw-bold">
+        <div class="col">Sunday</div>
+        <div class="col">Monday</div>
+        <div class="col">Tuesday</div>
+        <div class="col">Wednesday</div>
+        <div class="col">Thursday</div>
+        <div class="col">Friday</div>
+        <div class="col">Saturday</div>
     </div>
 
     <!-- Calendar Grid -->
-    <div class="row row-cols-7 g-2">
-        {% for day in days_in_month %}
-        <div class="col">
-            <div class="card h-100 {% if day in bookings_by_date %}bg-success text-white{% else %}bg-light{% endif %}">
-                <div class="card-header text-center">
-                    {{ day }}
+    {% for week in calendar_days|slice:":35"|chunked:7 %}
+    <div class="row g-1">
+        {% for day in week %}
+        <div class="col border text-center {% if day.month != month %}text-muted bg-light{% else %}{% if day in bookings_by_date %}bg-success text-white{% else %}bg-white{% endif %}{% endif %}">
+            <div class="small fw-bold">{{ day.day }}</div>
+            {% if day in bookings_by_date %}
+                {% for booking in bookings_by_date|get_item:day %}
+                <div class="small">
+                    <strong>{{ booking.service }}</strong><br>
+                    {{ booking.barber.name }} at {{ booking.time }}
                 </div>
-                <div class="card-body">
-                    {% if day in bookings_by_date %}
-                    {% for booking in bookings_by_date|get_item:day %}
-                    <div class="small">
-                        <strong>{{ booking.service }}</strong> with {{ booking.barber.name }}<br>
-                        {{ booking.time }}
-                    </div>
-                    {% endfor %}
-                    {% else %}
-                    <p class="small text-muted">No bookings</p>
-                    {% endif %}
-                </div>
-            </div>
+                {% endfor %}
+            {% else %}
+                <div class="small text-muted">No bookings</div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
-
-
+    {% endfor %}
 </div>
 {% endblock %}
