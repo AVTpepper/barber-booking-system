@@ -2,10 +2,19 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
 from django.contrib.auth.views import LogoutView
+from django.core.mail import send_mail
+from django.conf import settings
 from .models import Booking, Barber
 from .forms import BookingForm, CustomUserCreationForm
 
 
+def send_confirmation_email(booking):
+    subject = "Booking Confirmation"
+    message = f"Dear {booking.customer.username},\n\nYour booking with {booking.barber.name} on {booking.date} at {booking.time} has been confirmed.\n\nThank you!"
+    recipient = [booking.customer.email]
+    send_mail(subject, message, settings.EMAIL_HOST_USER, recipient, fail_silently=False)
+    
+    
 def landing_page(request):
     """This is the public landing page for all users."""
     return render(request, 'booking/landing_page.html')
@@ -53,13 +62,14 @@ def view_bookings(request):
 
 @login_required
 def create_booking(request):
-    """Create a new booking"""
     if request.method == 'POST':
         form = BookingForm(request.POST)
         if form.is_valid():
             booking = form.save(commit=False)
             booking.customer = request.user
             booking.save()
+            send_confirmation_email(booking)
+            send_admin_notification(booking)
             return redirect('view_bookings')
     else:
         form = BookingForm()
@@ -86,3 +96,10 @@ def delete_booking(request, pk):
         booking.delete()
         return redirect('view_bookings')
     return render(request, 'booking/delete_booking.html', {'booking': booking})
+
+
+def send_admin_notification(booking):
+    subject = "New Booking Created"
+    message = f"A new booking has been made for {booking.barber.name} on {booking.date} at {booking.time}."
+    recipient = ['admin@example.com', booking.barber.email]
+    send_mail(subject, message, settings.EMAIL_HOST_USER, recipient, fail_silently=False)

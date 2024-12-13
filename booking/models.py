@@ -1,12 +1,29 @@
 from django.contrib.auth.models import User
 from django.db import models
+from multiselectfield import MultiSelectField
+
+
+DAYS_OF_WEEK = [
+    ('Mon', 'Monday'),
+    ('Tue', 'Tuesday'),
+    ('Wed', 'Wednesday'),
+    ('Thu', 'Thursday'),
+    ('Fri', 'Friday'),
+    ('Sat', 'Saturday'),
+    ('Sun', 'Sunday'),
+]
+
 
 class Barber(models.Model):
     name = models.CharField(max_length=100)
     specialization = models.CharField(max_length=100)
+    start_time = models.TimeField(default="09:00:00")  
+    end_time = models.TimeField(default="17:00:00")    
+    working_days = MultiSelectField(choices=DAYS_OF_WEEK, default=['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
 
     def __str__(self):
         return self.name
+
 
 
 class Customer(models.Model):
