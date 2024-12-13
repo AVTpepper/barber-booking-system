@@ -4,12 +4,66 @@ from django.contrib.auth import login
 from django.contrib.auth.views import LogoutView
 from django.core.mail import send_mail
 from django.conf import settings
-from datetime import date, timedelta
+from django.http import JsonResponse
+from datetime import date, timedelta, datetime
 from calendar import monthrange
 from .models import Booking, Barber
 from .forms import BookingForm, CustomUserCreationForm
 
 
+def book_appointment(request):
+    """Streamlined booking page for selecting service, barber, date, and time."""
+    barbers = Barber.objects.all()
+    services = [
+        {"id": 1, "name": "Haircut"},
+        {"id": 2, "name": "Beard Trim"},
+        {"id": 3, "name": "Combo (Haircut + Beard Trim)"},
+    ]
+
+    if request.method == "POST":
+        service_id = request.POST.get("service")
+        barber_id = request.POST.get("barber")
+        selected_date = request.POST.get("date")
+        time_slot = request.POST.get("time_slot")
+
+        # Save the booking
+        barber = Barber.objects.get(id=barber_id)
+        Booking.objects.create(
+            customer=request.user,
+            barber=barber,
+            service=services[int(service_id) - 1]["name"],
+            date=selected_date,
+            time=time_slot,
+        )
+        return JsonResponse({"status": "success", "message": "Booking confirmed!"})
+
+    context = {
+        "barbers": barbers,
+        "services": services,
+    }
+    return render(request, "booking/book_appointment.html", context)
+
+def available_time_slots(request):
+    """Fetch available time slots for a barber and date."""
+    if request.method == "GET":
+        barber_id = request.GET.get("barber_id")
+        selected_date = request.GET.get("date")
+        barber = Barber.objects.get(id=barber_id)
+        bookings = Booking.objects.filter(barber=barber, date=selected_date)
+
+        # Generate all possible time slots (e.g., 9:00 AM to 5:00 PM)
+        start_time = barber.start_time
+        end_time = barber.end_time
+        all_time_slots = [
+            (datetime.combine(date.today(), start_time) + timedelta(minutes=30 * i)).time()
+            for i in range(int((end_time.hour - start_time.hour) * 2))
+        ]
+
+        # Exclude booked time slots
+        available_slots = [slot for slot in all_time_slots if slot not in [b.time for b in bookings]]
+        return JsonResponse({"available_slots": available_slots})
+    
+    
 @login_required
 def calendar_view(request, year=None, month=None):
     """Display a calendar with bookings for a specific month."""
@@ -98,15 +152,7 @@ def view_bookings(request):
     return render(request, 'booking/view_bookings.html', {'bookings': bookings})
 
 
-def book_appointment(request):
-    if request.method == 'POST':
-        form = BookingForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('home')
-    else:
-        form = BookingForm()
-    return render(request, 'booking/booking_form.html', {'form': form})
+
 
 
 def register(request):
@@ -131,20 +177,7 @@ def view_bookings(request):
     bookings = Booking.objects.filter(customer=request.user)
     return render(request, 'booking/view_bookings.html', {'bookings': bookings})
 
-@login_required
-def create_booking(request):
-    if request.method == 'POST':
-        form = BookingForm(request.POST)
-        if form.is_valid():
-            booking = form.save(commit=False)
-            booking.customer = request.user
-            booking.save()
-            send_confirmation_email(booking)
-            send_admin_notification(booking)
-            return redirect('view_bookings')
-    else:
-        form = BookingForm()
-    return render(request, 'booking/booking_form.html', {'form': form})
+
 
 @login_required
 def update_booking(request, pk):

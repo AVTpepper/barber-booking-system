@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center">Book Your Appointment</h1>
+
+    <!-- Form -->
+    <form id="booking-form" method="POST">
+        {% csrf_token %}
+
+        <!-- Service Selection -->
+        <div class="mb-3">
+            <label for="service" class="form-label">Select Service</label>
+            <select id="service" name="service" class="form-select">
+                <option value="">-- Choose a Service --</option>
+                {% for service in services %}
+                <option value="{{ service.id }}">{{ service.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Barber Selection -->
+        <div class="mb-3">
+            <label for="barber" class="form-label">Select Barber</label>
+            <select id="barber" name="barber" class="form-select">
+                <option value="">-- Choose a Barber --</option>
+                {% for barber in barbers %}
+                <option value="{{ barber.id }}">{{ barber.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Date Picker -->
+        <div class="mb-3">
+            <label for="date" class="form-label">Select Date</label>
+            <input type="date" id="date" name="date" class="form-control" min="{{ today }}">
+        </div>
+
+        <!-- Time Slot Selection -->
+        <div class="mb-3">
+            <label for="time_slot" class="form-label">Select Time Slot</label>
+            <select id="time_slot" name="time_slot" class="form-select" disabled>
+                <option value="">-- Choose a Time Slot --</option>
+            </select>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary">Confirm Booking</button>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const barberSelect = document.getElementById('barber');
+        const dateInput = document.getElementById('date');
+        const timeSlotSelect = document.getElementById('time_slot');
+
+        // Fetch available time slots when barber and date are selected
+        barberSelect.addEventListener('change', fetchTimeSlots);
+        dateInput.addEventListener('change', fetchTimeSlots);
+
+        function fetchTimeSlots() {
+            const barberId = barberSelect.value;
+            const selectedDate = dateInput.value;
+
+            if (barberId && selectedDate) {
+                fetch(`/available_time_slots/?barber_id=${barberId}&date=${selectedDate}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        timeSlotSelect.innerHTML = '<option value="">-- Choose a Time Slot --</option>';
+                        data.available_slots.forEach(slot => {
+                            const option = document.createElement('option');
+                            option.value = slot;
+                            option.textContent = slot;
+                            timeSlotSelect.appendChild(option);
+                        });
+                        timeSlotSelect.disabled = false;
+                    });
+            }
+        }
+    });
+</script>
+{% endblock %}
