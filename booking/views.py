@@ -12,9 +12,10 @@ def landing_page(request):
 
 
 @login_required
-def home(request):
-    bookings = Booking.objects.all()
-    return render(request, 'booking/home.html', {'bookings': bookings})
+def view_bookings(request):
+    """View all bookings for the logged-in user"""
+    bookings = Booking.objects.filter(customer=request.user)  # Only logged-in user's bookings
+    return render(request, 'booking/view_bookings.html', {'bookings': bookings})
 
 
 def book_appointment(request):
@@ -57,7 +58,7 @@ def create_booking(request):
         form = BookingForm(request.POST)
         if form.is_valid():
             booking = form.save(commit=False)
-            booking.customer = request.user  # Associate booking with logged-in user
+            booking.customer = request.user
             booking.save()
             return redirect('view_bookings')
     else:

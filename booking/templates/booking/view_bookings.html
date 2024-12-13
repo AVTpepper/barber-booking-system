@@ -3,9 +3,10 @@
 {% block content %}
 <h2>My Bookings</h2>
 
-<a href="{% url 'create_booking' %}" class="btn btn-primary">Create New Booking</a>
+<a href="{% url 'book_appointment' %}" class="btn btn-primary mb-3">Create New Booking</a>
 
-<table class="table mt-4">
+{% if bookings %}
+<table class="table">
     <thead>
         <tr>
             <th>Barber</th>
@@ -30,4 +31,7 @@
         {% endfor %}
     </tbody>
 </table>
+{% else %}
+<p>No bookings found. <a href="{% url 'book_appointment' %}">Create one now!</a></p>
+{% endif %}
 {% endblock %}
