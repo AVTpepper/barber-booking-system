@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>My Bookings</h2>
+
+<a href="{% url 'create_booking' %}" class="btn btn-primary">Create New Booking</a>
+
+<table class="table mt-4">
+    <thead>
+        <tr>
+            <th>Barber</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Service</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for booking in bookings %}
+        <tr>
+            <td>{{ booking.barber.name }}</td>
+            <td>{{ booking.date }}</td>
+            <td>{{ booking.time }}</td>
+            <td>{{ booking.service }}</td>
+            <td>
+                <a href="{% url 'update_booking' booking.id %}" class="btn btn-warning btn-sm">Edit</a>
+                <a href="{% url 'delete_booking' booking.id %}" class="btn btn-danger btn-sm">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

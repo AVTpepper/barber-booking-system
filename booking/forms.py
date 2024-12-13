@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 class BookingForm(forms.ModelForm):
     class Meta:
         model = Booking
-        fields = ['barber', 'customer', 'date', 'time', 'service']
+        fields = ['barber', 'date', 'time', 'service']
 
 
 class CustomUserCreationForm(forms.ModelForm):
