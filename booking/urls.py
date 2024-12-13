@@ -9,4 +9,6 @@ urlpatterns = [
     path('accounts/logout/', views.CustomLogoutView.as_view(), name='logout'),
     path('booking/update/<int:pk>/', views.update_booking, name='update_booking'),
     path('booking/delete/<int:pk>/', views.delete_booking, name='delete_booking'),
+    path('calendar/', views.calendar_view, name='calendar_view'),
+    path('calendar/<int:year>/<int:month>/', views.calendar_view, name='calendar_view_by_month'),
 ]

@@ -4,6 +4,8 @@ from django.contrib.auth import login
 from django.contrib.auth.views import LogoutView
 from django.core.mail import send_mail
 from django.conf import settings
+from datetime import date, timedelta
+from calendar import monthrange
 from .models import Booking, Barber
 from .forms import BookingForm, CustomUserCreationForm
 
@@ -103,3 +105,47 @@ def send_admin_notification(booking):
     message = f"A new booking has been made for {booking.barber.name} on {booking.date} at {booking.time}."
     recipient = ['admin@example.com', booking.barber.email]
     send_mail(subject, message, settings.EMAIL_HOST_USER, recipient, fail_silently=False)
+
+
+@login_required
+def calendar_view(request, year=None, month=None):
+    """Display a calendar with bookings for a specific month"""
+    today = date.today()
+
+    # Default to the current month if not provided
+    year = year or today.year
+    month = month or today.month
+
+    # Get the first and last day of the month
+    start_date = date(year, month, 1)
+    end_date = date(year, month, monthrange(year, month)[1])
+
+    # Get all bookings for the logged-in user within this month
+    bookings = Booking.objects.filter(customer=request.user, date__range=(start_date, end_date))
+
+    # Create a dictionary of bookings grouped by date
+    bookings_by_date = {}
+    for booking in bookings:
+        if booking.date not in bookings_by_date:
+            bookings_by_date[booking.date] = []
+        bookings_by_date[booking.date].append(booking)
+
+    # Generate a list of days in the month
+    days_in_month = range(1, monthrange(year, month)[1] + 1)
+
+    # Get the previous and next months
+    prev_month = (start_date - timedelta(days=1)).replace(day=1)
+    next_month = (end_date + timedelta(days=1)).replace(day=1)
+
+    context = {
+        'year': year,
+        'month': month,
+        'month_name': start_date.strftime('%B'),
+        'days_in_month': days_in_month,  # Pass the range as a list
+        'start_date': start_date,
+        'bookings_by_date': bookings_by_date,
+        'prev_month': prev_month,
+        'next_month': next_month,
+    }
+
+    return render(request, 'booking/calendar.html', context)
