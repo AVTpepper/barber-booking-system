@@ -12,20 +12,57 @@ from .models import Booking, Barber
 from .forms import BookingForm, CustomUserCreationForm
 
 
+
+def fetch_barber_availability(request):
+    """Fetch availability for a barber on a specific date."""
+    barber_id = request.GET.get("barber_id")
+    selected_date = request.GET.get("date")
+
+    # Fetch the barber and their bookings for the selected date
+    barber = Barber.objects.get(id=barber_id)
+    bookings = Booking.objects.filter(barber=barber, date=selected_date)
+
+    # Calculate the total slots for the day
+    total_slots = 16  # Assuming 16 slots per day
+
+    # If the selected date is today, adjust for passed time slots
+    selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
+    if selected_date_obj == datetime.today().date():
+        current_time = datetime.now().time()
+
+        # Define barber's working hours
+        start_time = barber.start_time  # Assuming Barber model has start_time (e.g., 09:00)
+        end_time = barber.end_time  # Assuming Barber model has end_time (e.g., 17:00)
+
+        # Calculate total possible slots
+        all_time_slots = [
+            (datetime.combine(datetime.today(), start_time) + timedelta(minutes=30 * i)).time()
+            for i in range(int((end_time.hour - start_time.hour) * 2))
+        ]
+
+        # Filter out past time slots
+        available_time_slots = [slot for slot in all_time_slots if slot > current_time]
+
+        # Adjust total slots for the day
+        total_slots = len(available_time_slots)
+
+    # Calculate available slots (subtract booked slots)
+    available_slots = total_slots - bookings.count()
+
+    return JsonResponse({"available_slots": available_slots})
+
+
 def book_appointment(request):
     """Streamlined booking page for selecting service, barber, date, and time."""
-    selected_date = request.GET.get("date", None)  # Get the selected date from the query or POST data
+    selected_date = request.GET.get("date", None)
+    if not selected_date:
+        selected_date = date.today().strftime('%Y-%m-%d')  # Default to today if no date is provided
+
     selected_time = request.GET.get("time", None)
 
     # Annotate each barber with their dynamically calculated available slots
     barbers = Barber.objects.all()
     for barber in barbers:
-        # Fetch bookings for the barber on the selected date
-        if selected_date:
-            bookings = Booking.objects.filter(barber=barber, date=selected_date)
-        else:
-            bookings = Booking.objects.none()
-
         # Calculate all possible time slots for the barber
         start_time = barber.start_time
         end_time = barber.end_time
@@ -34,7 +71,16 @@ def book_appointment(request):
             for i in range(int((end_time.hour - start_time.hour) * 2))
         ]
 
-        # Find the remaining available slots
+        # Fetch bookings for the barber on the selected date
+        selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
+        bookings = Booking.objects.filter(barber=barber, date=selected_date_obj)
+
+        # If the selected date is today, filter out past time slots
+        if selected_date_obj == date.today():
+            current_time = datetime.now().time()
+            total_slots = [slot for slot in total_slots if slot > current_time]
+
+        # Calculate booked slots and remaining slots
         booked_slots = [booking.time for booking in bookings]
         barber.available_slots = len([slot for slot in total_slots if slot not in booked_slots])
 
@@ -69,6 +115,7 @@ def book_appointment(request):
         "selected_time": selected_time,
     }
     return render(request, "booking/book_appointment.html", context)
+
 
 def available_time_slots(request):
     """Fetch available time slots for a barber and date."""
