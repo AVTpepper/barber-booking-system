@@ -1,0 +1,26 @@
+/* Barber selection buttons */
+.barber-button {
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+.barber-button .card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.barber-button:hover .card {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.barber-button.disabled {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.barber-button img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+}

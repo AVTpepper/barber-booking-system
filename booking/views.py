@@ -5,6 +5,7 @@ from django.contrib.auth.views import LogoutView
 from django.core.mail import send_mail
 from django.conf import settings
 from django.http import JsonResponse
+from django.db.models import Count
 from datetime import date, timedelta, datetime
 from calendar import monthrange
 from .models import Booking, Barber
@@ -13,7 +14,31 @@ from .forms import BookingForm, CustomUserCreationForm
 
 def book_appointment(request):
     """Streamlined booking page for selecting service, barber, date, and time."""
+    selected_date = request.GET.get("date", None)  # Get the selected date from the query or POST data
+    selected_time = request.GET.get("time", None)
+
+    # Annotate each barber with their dynamically calculated available slots
     barbers = Barber.objects.all()
+    for barber in barbers:
+        # Fetch bookings for the barber on the selected date
+        if selected_date:
+            bookings = Booking.objects.filter(barber=barber, date=selected_date)
+        else:
+            bookings = Booking.objects.none()
+
+        # Calculate all possible time slots for the barber
+        start_time = barber.start_time
+        end_time = barber.end_time
+        total_slots = [
+            (datetime.combine(date.today(), start_time) + timedelta(minutes=30 * i)).time()
+            for i in range(int((end_time.hour - start_time.hour) * 2))
+        ]
+
+        # Find the remaining available slots
+        booked_slots = [booking.time for booking in bookings]
+        barber.available_slots = len([slot for slot in total_slots if slot not in booked_slots])
+
+    # Define the available services
     services = [
         {"id": 1, "name": "Haircut"},
         {"id": 2, "name": "Beard Trim"},
@@ -26,8 +51,8 @@ def book_appointment(request):
         selected_date = request.POST.get("date")
         time_slot = request.POST.get("time_slot")
 
-        # Save the booking
-        barber = Barber.objects.get(id=barber_id)
+        # Create a new booking
+        barber = get_object_or_404(Barber, id=barber_id)
         Booking.objects.create(
             customer=request.user,
             barber=barber,
@@ -40,6 +65,8 @@ def book_appointment(request):
     context = {
         "barbers": barbers,
         "services": services,
+        "selected_date": selected_date,
+        "selected_time": selected_time,
     }
     return render(request, "booking/book_appointment.html", context)
 
@@ -48,7 +75,7 @@ def available_time_slots(request):
     if request.method == "GET":
         barber_id = request.GET.get("barber_id")
         selected_date = request.GET.get("date")
-        barber = Barber.objects.get(id=barber_id)
+        barber = get_object_or_404(Barber, id=barber_id)
         bookings = Booking.objects.filter(barber=barber, date=selected_date)
 
         # Generate all possible time slots (e.g., 9:00 AM to 5:00 PM)
@@ -60,8 +87,10 @@ def available_time_slots(request):
         ]
 
         # Exclude booked time slots
-        available_slots = [slot for slot in all_time_slots if slot not in [b.time for b in bookings]]
+        booked_slots = [b.time for b in bookings]
+        available_slots = [slot.strftime("%H:%M") for slot in all_time_slots if slot not in booked_slots]
         return JsonResponse({"available_slots": available_slots})
+
     
     
 @login_required

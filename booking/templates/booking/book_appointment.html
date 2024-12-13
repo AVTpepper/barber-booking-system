@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% load static %}
 {% block content %}
 <div class="container mt-5">
     <h1 class="text-center">Book Your Appointment</h1>
@@ -20,61 +20,150 @@
         </div>
 
         <!-- Barber Selection -->
-        <div class="mb-3">
-            <label for="barber" class="form-label">Select Barber</label>
-            <select id="barber" name="barber" class="form-select">
-                <option value="">-- Choose a Barber --</option>
+        <div class="container mt-4">
+            <h2>Select Your Barber</h2>
+            <div class="row text-center">
                 {% for barber in barbers %}
-                <option value="{{ barber.id }}">{{ barber.name }}</option>
+                <div class="col-6 col-md-4 mb-4">
+                    <button
+                        type="button"
+                        class="btn barber-button w-100 {% if barber.available_slots == 0 %}disabled{% endif %}"
+                        data-id="{{ barber.id }}"
+                        {% if barber.available_slots == 0 %}disabled{% endif %}
+                    >
+                        <div class="card text-center">
+                            <img
+                                src="{% static 'images/barber_default.webp' %}"
+                                alt="{{ barber.name }}"
+                                class="card-img-top rounded-circle mx-auto mt-3"
+                            >
+                            <div class="card-body">
+                                <h5 class="card-title">{{ barber.name }}</h5>
+                                <p class="card-text">{{ barber.specialization }}</p>
+                                {% if barber.available_slots > 0 %}
+                                <span class="badge bg-success">{{ barber.available_slots }} Slots Available</span>
+                                {% else %}
+                                <span class="badge bg-danger">Fully Booked</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </button>
+                </div>
                 {% endfor %}
-            </select>
+            </div>
         </div>
 
         <!-- Date Picker -->
-        <div class="mb-3">
-            <label for="date" class="form-label">Select Date</label>
-            <input type="date" id="date" name="date" class="form-control" min="{{ today }}">
+        <div class="container mt-4">
+            <h2>Select Date</h2>
+            <div class="row row-cols-7 g-1">
+                {% for day in calendar_days %}
+                <div class="col text-center {% if day.month != current_month %}text-muted{% endif %}">
+                    <button
+                        type="button"
+                        class="btn {% if day in available_dates %}btn-success{% else %}btn-light disabled{% endif %}"
+                        data-date="{{ day }}"
+                        {% if day not in available_dates %}disabled{% endif %}
+                    >
+                        {{ day.day }}
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
         </div>
 
         <!-- Time Slot Selection -->
-        <div class="mb-3">
-            <label for="time_slot" class="form-label">Select Time Slot</label>
-            <select id="time_slot" name="time_slot" class="form-select" disabled>
-                <option value="">-- Choose a Time Slot --</option>
-            </select>
+        <div id="time-slots" class="container mt-4">
+            <h2>Select Time Slot</h2>
+            <div class="row text-center">
+                {% for slot in available_time_slots %}
+                <div class="col-3">
+                    <button
+                        type="button"
+                        class="btn btn-outline-primary time-slot-button"
+                        data-time="{{ slot }}"
+                    >
+                        {{ slot }}
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
         </div>
 
         <!-- Submit Button -->
-        <button type="submit" class="btn btn-primary">Confirm Booking</button>
+        <button type="submit" class="btn btn-primary mt-4 w-100">Confirm Booking</button>
     </form>
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const barberSelect = document.getElementById('barber');
-        const dateInput = document.getElementById('date');
-        const timeSlotSelect = document.getElementById('time_slot');
+        const barberButtons = document.querySelectorAll('.barber-button');
+        const dateButtons = document.querySelectorAll('[data-date]');
+        const timeSlotsContainer = document.getElementById('time-slots');
 
-        // Fetch available time slots when barber and date are selected
-        barberSelect.addEventListener('change', fetchTimeSlots);
-        dateInput.addEventListener('change', fetchTimeSlots);
+        let selectedBarber = null;
+        let selectedDate = null;
 
-        function fetchTimeSlots() {
-            const barberId = barberSelect.value;
-            const selectedDate = dateInput.value;
+        // Barber selection
+        barberButtons.forEach(button => {
+            button.addEventListener('click', function () {
+                barberButtons.forEach(btn => btn.classList.remove('btn-primary'));
+                this.classList.add('btn-primary');
+                selectedBarber = this.getAttribute('data-id');
+                fetchAvailableDates();
+            });
+        });
 
-            if (barberId && selectedDate) {
-                fetch(`/available_time_slots/?barber_id=${barberId}&date=${selectedDate}`)
+        // Date selection
+        dateButtons.forEach(button => {
+            button.addEventListener('click', function () {
+                dateButtons.forEach(btn => btn.classList.remove('btn-primary'));
+                this.classList.add('btn-primary');
+                selectedDate = this.getAttribute('data-date');
+                fetchAvailableTimeSlots();
+            });
+        });
+
+        // Fetch available dates based on the barber
+        function fetchAvailableDates() {
+            if (selectedBarber) {
+                fetch(`/available_dates/?barber_id=${selectedBarber}`)
                     .then(response => response.json())
                     .then(data => {
-                        timeSlotSelect.innerHTML = '<option value="">-- Choose a Time Slot --</option>';
-                        data.available_slots.forEach(slot => {
-                            const option = document.createElement('option');
-                            option.value = slot;
-                            option.textContent = slot;
-                            timeSlotSelect.appendChild(option);
+                        dateButtons.forEach(button => {
+                            const date = button.getAttribute('data-date');
+                            if (data.available_dates.includes(date)) {
+                                button.classList.remove('btn-light', 'disabled');
+                                button.classList.add('btn-success');
+                                button.disabled = false;
+                            } else {
+                                button.classList.add('btn-light', 'disabled');
+                                button.classList.remove('btn-success');
+                                button.disabled = true;
+                            }
                         });
-                        timeSlotSelect.disabled = false;
+                    });
+            }
+        }
+
+        // Fetch available time slots based on barber and date
+        function fetchAvailableTimeSlots() {
+            if (selectedBarber && selectedDate) {
+                fetch(`/available_time_slots/?barber_id=${selectedBarber}&date=${selectedDate}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        timeSlotsContainer.innerHTML = '';
+                        data.available_slots.forEach(slot => {
+                            const button = document.createElement('button');
+                            button.classList.add('btn', 'btn-outline-primary', 'time-slot-button', 'col-3', 'm-1');
+                            button.textContent = slot;
+                            button.setAttribute('data-time', slot);
+                            button.addEventListener('click', function () {
+                                document.querySelectorAll('.time-slot-button').forEach(btn => btn.classList.remove('btn-primary'));
+                                this.classList.add('btn-primary');
+                            });
+                            timeSlotsContainer.appendChild(button);
+                        });
                     });
             }
         }
