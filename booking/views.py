@@ -10,9 +10,80 @@ from datetime import date, timedelta, datetime
 from calendar import monthrange
 from .models import Booking, Barber
 from .forms import BookingForm, CustomUserCreationForm
+import calendar
+from itertools import chain
 
 
+def fetch_available_dates(request):
+    """Fetch available dates for either all barbers or a specific barber."""
+    barber_id = request.GET.get("barber_id", None)
 
+    try:
+        year = int(request.GET.get("year", date.today().year))
+        month = int(request.GET.get("month", date.today().month))
+    except ValueError:
+        return JsonResponse({"error": "Invalid year or month"}, status=400)
+
+    start_date = date(year, month, 1)
+    _, days_in_month = calendar.monthrange(year, month)
+    end_date = date(year, month, days_in_month)
+
+    if barber_id:  # Fetch dates for a specific barber
+        try:
+            barber = Barber.objects.get(id=barber_id)
+            print(f"Barber ID: {barber_id}, Year: {year}, Month: {month}")
+
+            working_days = {day[:3]: idx for idx, day in enumerate(calendar.day_name)}
+            barber_working_days = [working_days[day] for day in barber.working_days]
+
+            # Calculate available dates for the specific barber
+            available_dates = [
+                (start_date + timedelta(days=i)).isoformat()
+                for i in range((end_date - start_date).days + 1)
+                if (start_date + timedelta(days=i)).weekday() in barber_working_days
+            ]
+
+            # Exclude fully booked dates
+            bookings = Booking.objects.filter(barber=barber, date__range=(start_date, end_date))
+            booked_dates = set(booking.date for booking in bookings)
+
+            available_dates = [d for d in available_dates if date.fromisoformat(d) not in booked_dates]
+
+            return JsonResponse({"available_dates": available_dates})
+
+        except Barber.DoesNotExist:
+            return JsonResponse({"error": "Barber not found"}, status=404)
+
+    else:  # Fetch combined availability across all barbers
+        print(f"Fetching dates for all barbers, Year: {year}, Month: {month}")
+
+        # Find available dates for all barbers
+        all_available_dates = set()
+
+        for barber in Barber.objects.all():
+            working_days = {day[:3]: idx for idx, day in enumerate(calendar.day_name)}
+            barber_working_days = [working_days[day] for day in barber.working_days]
+
+            # Calculate barber's available dates
+            barber_available_dates = [
+                (start_date + timedelta(days=i)).isoformat()
+                for i in range((end_date - start_date).days + 1)
+                if (start_date + timedelta(days=i)).weekday() in barber_working_days
+            ]
+
+            # Exclude barber's fully booked dates
+            bookings = Booking.objects.filter(barber=barber, date__range=(start_date, end_date))
+            booked_dates = set(booking.date for booking in bookings)
+
+            barber_available_dates = [d for d in barber_available_dates if date.fromisoformat(d) not in booked_dates]
+
+            # Add to the combined set
+            all_available_dates.update(barber_available_dates)
+
+        return JsonResponse({"available_dates": list(all_available_dates)})
+
+    
+    
 def fetch_barber_availability(request):
     """Fetch availability for a barber on a specific date."""
     barber_id = request.GET.get("barber_id")
@@ -22,99 +93,103 @@ def fetch_barber_availability(request):
     barber = Barber.objects.get(id=barber_id)
     bookings = Booking.objects.filter(barber=barber, date=selected_date)
 
-    # Calculate the total slots for the day
-    total_slots = 16  # Assuming 16 slots per day
+    # Define barber's working hours
+    start_time = barber.start_time  # Assuming Barber model has start_time (e.g., 09:00)
+    end_time = barber.end_time  # Assuming Barber model has end_time (e.g., 17:00)
 
-    # If the selected date is today, adjust for passed time slots
+    # Calculate all possible time slots
+    total_slots = [
+        (datetime.combine(date.today(), start_time) + timedelta(minutes=30 * i)).time()
+        for i in range(int((end_time.hour - start_time.hour) * 2))
+    ]
+
+    # Adjust for the current day to exclude past time slots
     selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
     if selected_date_obj == datetime.today().date():
         current_time = datetime.now().time()
+        total_slots = [slot for slot in total_slots if slot > current_time]
 
-        # Define barber's working hours
-        start_time = barber.start_time  # Assuming Barber model has start_time (e.g., 09:00)
-        end_time = barber.end_time  # Assuming Barber model has end_time (e.g., 17:00)
-
-        # Calculate total possible slots
-        all_time_slots = [
-            (datetime.combine(datetime.today(), start_time) + timedelta(minutes=30 * i)).time()
-            for i in range(int((end_time.hour - start_time.hour) * 2))
-        ]
-
-        # Filter out past time slots
-        available_time_slots = [slot for slot in all_time_slots if slot > current_time]
-
-        # Adjust total slots for the day
-        total_slots = len(available_time_slots)
-
-    # Calculate available slots (subtract booked slots)
-    available_slots = total_slots - bookings.count()
+    # Subtract booked slots from total slots
+    booked_slots = [booking.time for booking in bookings]
+    available_slots = [slot.strftime('%H:%M') for slot in total_slots if slot not in booked_slots]
 
     return JsonResponse({"available_slots": available_slots})
 
 
 def book_appointment(request):
-    """Streamlined booking page for selecting service, barber, date, and time."""
+    today = date.today()
     selected_date = request.GET.get("date", None)
+
     if not selected_date:
-        selected_date = date.today().strftime('%Y-%m-%d')  # Default to today if no date is provided
+        selected_date = today.strftime('%Y-%m-%d')
 
-    selected_time = request.GET.get("time", None)
+    selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
+    year = selected_date_obj.year
+    month = selected_date_obj.month
 
-    # Annotate each barber with their dynamically calculated available slots
+    first_day_of_month = date(year, month, 1)
+    days_in_month = monthrange(year, month)[1]
+    first_weekday = (first_day_of_month.weekday() + 1) % 7
+
+    start_date = first_day_of_month - timedelta(days=first_weekday)
+    end_date = start_date + timedelta(days=41)
+
+    calendar_days = []
+    current_date = start_date
+    week = []
+
+    while current_date <= end_date:
+        week.append(current_date)
+        if len(week) == 7:
+            calendar_days.append(week)
+            week = []
+        current_date += timedelta(days=1)
+
     barbers = Barber.objects.all()
     for barber in barbers:
-        # Calculate all possible time slots for the barber
         start_time = barber.start_time
         end_time = barber.end_time
-        total_slots = [
-            (datetime.combine(date.today(), start_time) + timedelta(minutes=30 * i)).time()
-            for i in range(int((end_time.hour - start_time.hour) * 2))
-        ]
 
-        # Fetch bookings for the barber on the selected date
-        selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
-        bookings = Booking.objects.filter(barber=barber, date=selected_date_obj)
+        # Check availability for the next 30 days
+        available_dates = []
+        for single_date in (today + timedelta(days=i) for i in range(30)):
+            total_slots = [
+                (datetime.combine(single_date, start_time) + timedelta(minutes=30 * i)).time()
+                for i in range(int((end_time.hour - start_time.hour) * 2))
+            ]
 
-        # If the selected date is today, filter out past time slots
-        if selected_date_obj == date.today():
-            current_time = datetime.now().time()
-            total_slots = [slot for slot in total_slots if slot > current_time]
+            # Check for booked slots
+            bookings = Booking.objects.filter(barber=barber, date=single_date)
+            booked_slots = [b.time for b in bookings]
 
-        # Calculate booked slots and remaining slots
-        booked_slots = [booking.time for booking in bookings]
-        barber.available_slots = len([slot for slot in total_slots if slot not in booked_slots])
+            # If any slot is available, add the date to available dates
+            if any(slot for slot in total_slots if slot not in booked_slots):
+                available_dates.append(single_date)
 
-    # Define the available services
+        barber.next_available_date = available_dates[0] if available_dates else None
+        barber.is_fully_booked = not bool(available_dates)
+
     services = [
         {"id": 1, "name": "Haircut"},
         {"id": 2, "name": "Beard Trim"},
         {"id": 3, "name": "Combo (Haircut + Beard Trim)"},
     ]
 
-    if request.method == "POST":
-        service_id = request.POST.get("service")
-        barber_id = request.POST.get("barber")
-        selected_date = request.POST.get("date")
-        time_slot = request.POST.get("time_slot")
-
-        # Create a new booking
-        barber = get_object_or_404(Barber, id=barber_id)
-        Booking.objects.create(
-            customer=request.user,
-            barber=barber,
-            service=services[int(service_id) - 1]["name"],
-            date=selected_date,
-            time=time_slot,
-        )
-        return JsonResponse({"status": "success", "message": "Booking confirmed!"})
-
     context = {
         "barbers": barbers,
         "services": services,
         "selected_date": selected_date,
-        "selected_time": selected_time,
+        "calendar_days": calendar_days,
+        "year": year,
+        "month": month,
     }
+    print(f"Barber: {barber.name}, Fully Booked: {barber.is_fully_booked}, Next Available Date: {barber.next_available_date}")
+
     return render(request, "booking/book_appointment.html", context)
+
+
+
+
 
 
 def available_time_slots(request):
@@ -195,6 +270,7 @@ def calendar_view(request, year=None, month=None):
         'prev_month': prev_month,
         'next_month': next_month,
     }
+
     return render(request, 'booking/calendar.html', context)
 
 

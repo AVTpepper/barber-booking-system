@@ -12,4 +12,5 @@ urlpatterns = [
     path('booking/delete/<int:pk>/', views.delete_booking, name='delete_booking'),
     path('calendar/', views.calendar_view, name='calendar_view'),
     path('calendar/<int:year>/<int:month>/', views.calendar_view, name='calendar_view_by_month'),
+    path('fetch_available_dates/', views.fetch_available_dates, name='fetch_available_dates'),
 ]

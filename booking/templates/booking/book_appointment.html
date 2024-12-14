@@ -5,7 +5,7 @@
     <h1 class="text-center">Book Your Appointment</h1>
 
     <!-- Form -->
-    <form id="booking-form" method="POST">
+    <form id="booking-form" method="POST" action="{% url 'book_appointment' %}">
         {% csrf_token %}
 
         <!-- Service Selection -->
@@ -21,29 +21,29 @@
 
         <!-- Barber Selection -->
         <div class="container mt-4">
-            <h2>Select Your Barber</h2>
-            <div class="row text-center">
+            <h2 class="text-center mb-4">Select Your Barber</h2>
+            <div class="row g-4">
                 {% for barber in barbers %}
-                <div class="col-6 col-md-4 mb-4">
-                    <button
-                        type="button"
-                        class="btn barber-button w-100 {% if barber.available_slots == 0 %}disabled{% endif %}"
-                        data-id="{{ barber.id }}"
-                        {% if barber.available_slots == 0 %}disabled{% endif %}
-                    >
-                        <div class="card text-center">
-                            <img
-                                src="{% static 'images/barber_default.webp' %}"
-                                alt="{{ barber.name }}"
-                                class="card-img-top rounded-circle mx-auto mt-3"
-                            >
-                            <div class="card-body">
-                                <h5 class="card-title">{{ barber.name }}</h5>
-                                <p class="card-text">{{ barber.specialization }}</p>
-                                {% if barber.available_slots > 0 %}
-                                <span class="badge bg-success">{{ barber.available_slots }} Slots Available</span>
-                                {% else %}
+                <div class="col-12 col-sm-6 col-md-4">
+                    <button type="button"
+                        class="btn barber-button w-100 p-0 shadow-sm {% if barber.is_fully_booked %}disabled{% endif %}"
+                        data-id="{{ barber.id }}" {% if barber.is_fully_booked %}disabled{% endif %}>
+                        <div
+                            class="card h-100 barber-card {% if selected_barber_id == barber.id %}selected-barber{% endif %}">
+                            <div class="card-img-top position-relative barber-img-container mx-auto mt-3">
+                                <img src="{% static 'images/barber_default.webp' %}" alt="{{ barber.name }}"
+                                    class="img-fluid barber-img">
+                            </div>
+                            <div class="card-body text-center">
+                                <h5 class="card-title mb-2">{{ barber.name }}</h5>
+                                <p class="card-text text-muted small">{{ barber.specialization }}</p>
+                                {% if barber.is_fully_booked %}
                                 <span class="badge bg-danger">Fully Booked</span>
+                                {% if barber.next_available_date %}
+                                <p class="mt-2 text-muted small">Next: {{ barber.next_available_date }}</p>
+                                {% endif %}
+                                {% else %}
+                                <span class="badge bg-success">Slots Available</span>
                                 {% endif %}
                             </div>
                         </div>
@@ -53,120 +53,145 @@
             </div>
         </div>
 
-        <!-- Date Picker -->
+        <!-- Calendar Section -->
         <div class="container mt-4">
-            <h2>Select Date</h2>
-            <div class="row row-cols-7 g-1">
-                {% for day in calendar_days %}
-                <div class="col text-center {% if day.month != current_month %}text-muted{% endif %}">
-                    <button
-                        type="button"
-                        class="btn {% if day in available_dates %}btn-success{% else %}btn-light disabled{% endif %}"
-                        data-date="{{ day }}"
-                        {% if day not in available_dates %}disabled{% endif %}
-                    >
+            <h2 class="text-center">Select Date</h2>
+            <div class="row text-center">
+                <div class="col">Sunday</div>
+                <div class="col">Monday</div>
+                <div class="col">Tuesday</div>
+                <div class="col">Wednesday</div>
+                <div class="col">Thursday</div>
+                <div class="col">Friday</div>
+                <div class="col">Saturday</div>
+            </div>
+            {% for week in calendar_days %}
+            <div class="row">
+                {% for day in week %}
+                <div class="col text-center">
+                    {% if day.month == month %}
+                    <button class="btn date-button btn-secondary w-100 py-2" data-date="{{ day.isoformat }}">
                         {{ day.day }}
                     </button>
+                    {% else %}
+                    <span>&nbsp;</span>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
+            {% endfor %}
         </div>
 
         <!-- Time Slot Selection -->
-        <div id="time-slots" class="container mt-4">
+        <div class="container mt-4">
             <h2>Select Time Slot</h2>
-            <div class="row text-center">
-                {% for slot in available_time_slots %}
-                <div class="col-3">
-                    <button
-                        type="button"
-                        class="btn btn-outline-primary time-slot-button"
-                        data-time="{{ slot }}"
-                    >
-                        {{ slot }}
-                    </button>
-                </div>
-                {% endfor %}
-            </div>
+            <div id="time-slots" class="row text-center"></div>
         </div>
 
         <!-- Submit Button -->
-        <button type="submit" class="btn btn-primary mt-4 w-100">Confirm Booking</button>
+        <button type="submit" id="confirm-booking" class="btn btn-primary mt-4 w-100">Confirm Booking</button>
     </form>
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const barberButtons = document.querySelectorAll('.barber-button');
-        const dateButtons = document.querySelectorAll('[data-date]');
+        const calendarContainer = document.querySelector('.container.mt-4 .row');
         const timeSlotsContainer = document.getElementById('time-slots');
+        const confirmButton = document.querySelector('#confirm-booking');
 
         let selectedBarber = null;
         let selectedDate = null;
 
-        // Barber selection
+        // Fetch and display all available dates on page load
+        fetchAvailableDates();
+
+        // Barber selection logic
         barberButtons.forEach(button => {
             button.addEventListener('click', function () {
-                barberButtons.forEach(btn => btn.classList.remove('btn-primary'));
-                this.classList.add('btn-primary');
-                selectedBarber = this.getAttribute('data-id');
-                fetchAvailableDates();
+                selectedBarber = this.dataset.id;
+                console.log(`Barber selected: ${selectedBarber}`);
+
+                // Remove 'selected-barber' class from all cards
+                document.querySelectorAll('.barber-card').forEach(card => card.classList.remove('selected-barber'));
+
+                // Add 'selected-barber' class to the currently selected card
+                const selectedCard = this.querySelector('.barber-card');
+                if (selectedCard) {
+                    selectedCard.classList.add('selected-barber');
+                }
             });
         });
 
-        // Date selection
-        dateButtons.forEach(button => {
-            button.addEventListener('click', function () {
-                dateButtons.forEach(btn => btn.classList.remove('btn-primary'));
-                this.classList.add('btn-primary');
-                selectedDate = this.getAttribute('data-date');
-                fetchAvailableTimeSlots();
-            });
-        });
-
-        // Fetch available dates based on the barber
+        // Fetch available dates for either all barbers or a specific barber
         function fetchAvailableDates() {
+            let url = '/fetch_available_dates/';
             if (selectedBarber) {
-                fetch(`/available_dates/?barber_id=${selectedBarber}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        dateButtons.forEach(button => {
-                            const date = button.getAttribute('data-date');
-                            if (data.available_dates.includes(date)) {
-                                button.classList.remove('btn-light', 'disabled');
-                                button.classList.add('btn-success');
-                                button.disabled = false;
-                            } else {
-                                button.classList.add('btn-light', 'disabled');
-                                button.classList.remove('btn-success');
-                                button.disabled = true;
-                            }
-                        });
-                    });
+                url += `?barber_id=${selectedBarber}`;
             }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Available Dates Data:", data);
+                    renderCalendar(data.available_dates);
+                })
+                .catch(error => console.error("Error fetching dates:", error));
         }
 
-        // Fetch available time slots based on barber and date
-        function fetchAvailableTimeSlots() {
-            if (selectedBarber && selectedDate) {
-                fetch(`/available_time_slots/?barber_id=${selectedBarber}&date=${selectedDate}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        timeSlotsContainer.innerHTML = '';
-                        data.available_slots.forEach(slot => {
-                            const button = document.createElement('button');
-                            button.classList.add('btn', 'btn-outline-primary', 'time-slot-button', 'col-3', 'm-1');
-                            button.textContent = slot;
-                            button.setAttribute('data-time', slot);
-                            button.addEventListener('click', function () {
-                                document.querySelectorAll('.time-slot-button').forEach(btn => btn.classList.remove('btn-primary'));
-                                this.classList.add('btn-primary');
-                            });
-                            timeSlotsContainer.appendChild(button);
-                        });
-                    });
+        // Render calendar dates
+        function renderCalendar(dates) {
+            const calendarButtons = document.querySelectorAll('.date-button');
+            calendarButtons.forEach(button => {
+                const date = button.getAttribute('data-date');
+                if (dates.includes(date)) {
+                    button.disabled = false;
+                    button.classList.add('btn-success');
+                    button.addEventListener('click', () => selectDate(date));
+                } else {
+                    button.disabled = true;
+                    button.classList.remove('btn-success');
+                }
+            });
+        }
+
+        // Date selection logic
+        function selectDate(date) {
+            selectedDate = date;
+            console.log(`Date selected: ${selectedDate}`);
+            fetchTimeSlots();
+        }
+
+        // Fetch available time slots
+        function fetchTimeSlots() {
+            if (!selectedBarber || !selectedDate) {
+                console.warn("Barber or date not selected.");
+                return;
             }
+            fetch(`/available_time_slots/?barber_id=${selectedBarber}&date=${selectedDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    renderTimeSlots(data.available_slots);
+                })
+                .catch(error => console.error("Error fetching time slots:", error));
+        }
+
+        // Render available time slots
+        function renderTimeSlots(slots) {
+            timeSlotsContainer.innerHTML = '';
+            slots.forEach(slot => {
+                const slotButton = document.createElement('button');
+                slotButton.className = 'btn btn-outline-primary time-slot-button m-1';
+                slotButton.textContent = slot;
+                slotButton.addEventListener('click', () => {
+                    document.querySelectorAll('.time-slot-button').forEach(btn => btn.classList.remove('btn-primary'));
+                    slotButton.classList.add('btn-primary');
+                });
+                timeSlotsContainer.appendChild(slotButton);
+            });
         }
     });
+
 </script>
+
 {% endblock %}

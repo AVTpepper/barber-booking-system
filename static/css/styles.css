@@ -1,26 +1,58 @@
-/* Barber selection buttons */
-.barber-button {
-    border: none;
-    padding: 0;
-    background: transparent;
+/* Barber card container styling */
+.barber-card {
+    min-height: 250px; /* Consistent card height */
+    min-width: 100%;   /* Consistent card width */
+    overflow: hidden;
+    position: relative; /* Prevent layout shifting */
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
 }
 
-.barber-button .card {
-    transition: transform 0.2s, box-shadow 0.2s;
+/* Hover effect for barber cards */
+.barber-card:hover {
+    transform: scale(1.05); /* Scale on hover */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15); /* Add shadow */
+    z-index: 10; /* Bring hovered card to the top */
 }
 
-.barber-button:hover .card {
-    transform: scale(1.05);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+/* Selected barber card styling */
+.selected-barber {
+    box-shadow: 0 0 0 4px black; /* Simulates a 4px border without affecting size */
+    transform: scale(1); /* Keep original size for selected card */
+    z-index: 10; /* Ensure it's on top but doesn't affect others */
+    background-color: #ffffff; /* Ensure background remains consistent */
 }
 
-.barber-button.disabled {
-    pointer-events: none;
-    opacity: 0.6;
+/* Ensure consistent size for all states */
+.barber-card,
+.barber-card:hover,
+.selected-barber {
+    will-change: transform; /* Optimize visual changes */
 }
 
-.barber-button img {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
+/* Prevent hover or selection from affecting layout */
+.barber-card:hover,
+.selected-barber {
+    transform-origin: center; /* Ensure scaling is uniform */
+    box-shadow: 0 0 0 4px black; /* Simulates a 4px border without affecting size */
+}
+
+/* Text styles for the card (keep text visible) */
+.barber-card .card-title,
+.barber-card .card-text,
+.barber-card .badge {
+    color: #000; /* Ensure text color is black */
+    transition: color 0.3s ease;
+}
+
+/* Ensure text visibility in hover and selected states */
+.barber-card:hover .card-title,
+.barber-card:hover .card-text,
+.selected-barber .card-title,
+.selected-barber .card-text {
+    color: #000; /* Explicitly set text color */
+}
+
+
+.barber-card .badge {
+    color: #fff;
 }
